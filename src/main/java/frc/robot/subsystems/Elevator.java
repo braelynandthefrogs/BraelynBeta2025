@@ -14,6 +14,13 @@ import com.ctre.phoenix6.signals.NeutralModeValue;
 import edu.wpi.first.math.controller.ElevatorFeedforward;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.units.Units;
+import edu.wpi.first.units.measure.MutAngle;
+import edu.wpi.first.units.measure.MutAngularVelocity;
+import edu.wpi.first.units.measure.MutDistance;
+import edu.wpi.first.units.measure.MutLinearVelocity;
+import edu.wpi.first.units.measure.MutVoltage;
+import edu.wpi.first.units.measure.Voltage;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
@@ -26,12 +33,14 @@ import edu.wpi.first.wpilibj.smartdashboard.Mechanism2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismLigament2d;
 import edu.wpi.first.wpilibj.smartdashboard.MechanismRoot2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.sysid.SysIdRoutineLog;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 
 public class Elevator extends SubsystemBase implements AutoCloseable {
   // This gearbox represents a gearbox containing 4 Vex 775pro motors.
-  private final double ELEVATOR_KP = 0.0001;
+  private final double ELEVATOR_KP = 0.1;
   private final double ELEVATOR_KI = 0;
   private final double ELEVATOR_KD = 0;
   private final double ELEVATOR_KS = 0;
@@ -58,6 +67,16 @@ public class Elevator extends SubsystemBase implements AutoCloseable {
   private TalonFX m_motor;
   private TalonFX m_motor2;
   
+  private final MutVoltage m_appliedVoltage = Units.Volt.mutable(0);
+  // Mutable holder for unit-safe linear distance values, persisted to avoid reallocation.
+  private final MutDistance m_distance = Units.Meters.mutable(0);
+  // Mutable holder for unit-safe linear velocity values, persisted to avoid reallocation.
+  private final MutLinearVelocity m_velocity = Units.MetersPerSecond.mutable(0);
+  // Creates a SysIdRoutine
+  SysIdRoutine routine = new SysIdRoutine(
+      new SysIdRoutine.Config(),
+      new SysIdRoutine.Mechanism(this::voltageDrive, this::logMotors, this)
+  );
     // Simulation classes help us simulate what's going on, including gravity.
     /*private final ElevatorSim m_elevatorSim =
         new ElevatorSim(
@@ -123,6 +142,37 @@ public class Elevator extends SubsystemBase implements AutoCloseable {
     //SmartDashboard.putData("Elevator Sim", m_mech2d);
   }
 
+  public Command sysIdQuasistatic(SysIdRoutine.Direction direction) {
+    return routine.quasistatic(direction);
+  }
+  
+  public Command sysIdDynamic(SysIdRoutine.Direction direction) {
+    return routine.dynamic(direction);
+  }
+
+  public void voltageDrive(Voltage drive){
+    m_motor.setVoltage(drive.in(Units.Volts));
+    m_motor2.setVoltage(drive.in(Units.Volts));
+  }
+  public void logMotors(SysIdRoutineLog log){ //in theory this should work?
+    log.motor("elevator-motor")
+                    .voltage(
+                        m_appliedVoltage.mut_replace(
+                            m_motor.get() * RobotController.getBatteryVoltage(), Units.Volts))
+                    .linearPosition(m_distance.mut_replace(m_motor.getPosition().getValueAsDouble(), Units.Meters))
+                  
+                    .linearVelocity(
+                        m_velocity.mut_replace(m_motor.getVelocity().getValueAsDouble(), Units.MetersPerSecond));
+    log.motor("elevator-motor2")
+                    .voltage(
+                        m_appliedVoltage.mut_replace(
+                            m_motor2.get() * RobotController.getBatteryVoltage(), Units.Volts))
+                    .linearPosition(m_distance.mut_replace(m_motor2.getPosition().getValueAsDouble(), Units.Meters))
+                  
+                    .linearVelocity(
+                        m_velocity.mut_replace(m_motor2.getVelocity().getValueAsDouble(), Units.MetersPerSecond));
+  }
+
   /** Advance the simulation. */
   /*public void simulationPeriodic() {
     // In this method, we update our simulation of what our elevator is doing
@@ -149,7 +199,7 @@ public class Elevator extends SubsystemBase implements AutoCloseable {
 
     // With the setpoint value we run PID control like normal
     double pidOutput = m_controller.calculate(m_motor.getPosition().getValueAsDouble());
-    double feedforwardOutput = m_feedforward.calculate(m_controller.getSetpoint().velocity);
+    double feedforwardOutput = 0;   //m_feedforward.calculate(m_controller.getSetpoint().velocity); can be used later to calculate with correct values
     m_motor.setVoltage(pidOutput + feedforwardOutput);
   }
 
