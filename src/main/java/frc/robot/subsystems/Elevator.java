@@ -67,11 +67,11 @@ public class Elevator extends SubsystemBase implements AutoCloseable {
   private TalonFX m_motor;
   private TalonFX m_motor2;
   
-  private final MutVoltage m_appliedVoltage = Units.Volt.mutable(0);
+  private final MutVoltage m_appliedVoltage = Units.Volts.mutable(0);
   // Mutable holder for unit-safe linear distance values, persisted to avoid reallocation.
-  private final MutDistance m_distance = Units.Meters.mutable(0);
+  private final MutAngle m_angle = Units.Radians.mutable(0);
   // Mutable holder for unit-safe linear velocity values, persisted to avoid reallocation.
-  private final MutLinearVelocity m_velocity = Units.MetersPerSecond.mutable(0);
+  private final MutAngularVelocity m_velocity = Units.RadiansPerSecond.mutable(0);
   // Creates a SysIdRoutine
   SysIdRoutine routine = new SysIdRoutine(
       new SysIdRoutine.Config(),
@@ -156,21 +156,13 @@ public class Elevator extends SubsystemBase implements AutoCloseable {
   }
   public void logMotors(SysIdRoutineLog log){ //in theory this should work?
     log.motor("elevator-motor")
-                    .voltage(
-                        m_appliedVoltage.mut_replace(
-                            m_motor.get() * RobotController.getBatteryVoltage(), Units.Volts))
-                    .linearPosition(m_distance.mut_replace(m_motor.getPosition().getValueAsDouble(), Units.Meters))
-                  
-                    .linearVelocity(
-                        m_velocity.mut_replace(m_motor.getVelocity().getValueAsDouble(), Units.MetersPerSecond));
+      .voltage(m_appliedVoltage.mut_replace(m_motor.get() * RobotController.getBatteryVoltage(), Units.Volts))
+      .angularPosition(m_motor.getPosition().getValue())
+      .angularVelocity(m_motor.getVelocity().getValue());
     log.motor("elevator-motor2")
-                    .voltage(
-                        m_appliedVoltage.mut_replace(
-                            m_motor2.get() * RobotController.getBatteryVoltage(), Units.Volts))
-                    .linearPosition(m_distance.mut_replace(m_motor2.getPosition().getValueAsDouble(), Units.Meters))
-                  
-                    .linearVelocity(
-                        m_velocity.mut_replace(m_motor2.getVelocity().getValueAsDouble(), Units.MetersPerSecond));
+      .voltage( m_appliedVoltage.mut_replace(m_motor2.get() * RobotController.getBatteryVoltage(), Units.Volts))
+      .angularPosition(m_motor2.getPosition().getValue())
+      .angularVelocity(m_motor2.getVelocity().getValue());
   }
 
   /** Advance the simulation. */
